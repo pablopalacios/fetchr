@@ -151,7 +151,11 @@ FetchrHttpRequest.prototype.abort = function () {
 };
 
 FetchrHttpRequest.prototype.then = function (resolve, reject) {
-    this._promise = this._promise.then(resolve, reject);
+    if (!this._promise) {
+        this._promise = this._promise.then(resolve, reject);
+    } else {
+        this._promise.then(resolve, reject);
+    }
     return this;
 };
 

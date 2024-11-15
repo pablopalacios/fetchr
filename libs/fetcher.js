@@ -14,6 +14,8 @@ const OPERATIONS = [OP_READ, OP_CREATE, OP_UPDATE, OP_DELETE];
 const RESOURCE_SANTIZER_REGEXP = /[^\w.]+/g;
 
 class FetchrError extends Error {
+    statusCode = 500;
+
     constructor(message) {
         super(message);
         this.name = 'FetchrError';
@@ -244,6 +246,8 @@ class Request {
             const err = new FetchrError(
                 `Service "${sanitizeResourceName(this.resource)}" could not be found`,
             );
+            err.statusCode = 404;
+
             return { err };
         }
 
@@ -254,6 +258,8 @@ class Request {
             const err = new FetchrError(
                 `operation: ${this.operation} is undefined on service: ${this.resource}`,
             );
+            err.statusCode = 405;
+
             return { err };
         }
 

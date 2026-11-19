@@ -360,6 +360,27 @@ describe('client/server integration', () => {
                 expect(response.reason).to.equal(FetchrError.ABORT);
             });
 
+            it('can abort while the response body is downloading', async () => {
+                const response = await page.evaluate(() => {
+                    const fetcher = new Fetchr({ xhrPath: '/stalled-body' });
+                    const request = fetcher.read('item');
+
+                    // Headers arrive immediately, so after 300ms the
+                    // client is stuck in response.json().
+                    const abort = () =>
+                        new Promise((resolve) => {
+                            setTimeout(() => {
+                                request.abort();
+                                resolve();
+                            }, 300);
+                        });
+
+                    return Promise.all([request, abort()]).catch((err) => err);
+                });
+
+                expect(response.reason).to.equal(FetchrError.ABORT);
+            });
+
             it('can handle timeouts', async () => {
                 const response = await page.evaluate(() => {
                     const fetcher = new Fetchr();
@@ -593,6 +614,90 @@ describe('client/server integration', () => {
                     data: { retry: 'ok' },
                     meta: {},
                 });
+            });
+        });
+
+        describe('unhandled rejections', () => {
+            // A failed request that the caller handles must not also
+            // surface as an unhandled rejection in the browser.
+
+            before(async () => {
+                await page.evaluate(() => {
+                    window.unhandledRejections = [];
+                    window.addEventListener('unhandledrejection', (event) => {
+                        window.unhandledRejections.push(
+                            (event.reason && event.reason.reason) ||
+                                String(event.reason),
+                        );
+                    });
+                });
+            });
+
+            beforeEach(async () => {
+                await page.evaluate(() => {
+                    window.unhandledRejections = [];
+                });
+            });
+
+            // Lets the browser fire any pending unhandledrejection
+            // events before we read them.
+            const getUnhandledRejections = () =>
+                page.evaluate(
+                    () =>
+                        new Promise((resolve) =>
+                            setTimeout(
+                                () => resolve(window.unhandledRejections),
+                                100,
+                            ),
+                        ),
+                );
+
+            it('none for a handled service error', async () => {
+                const response = await page.evaluate(() => {
+                    const fetcher = new Fetchr();
+                    return fetcher.read('error').catch((err) => err);
+                });
+
+                expect(response.reason).to.equal(FetchrError.BAD_HTTP_STATUS);
+                expect(await getUnhandledRejections()).to.deep.equal([]);
+            });
+
+            it('none for a handled service error using end()', async () => {
+                const response = await page.evaluate(
+                    () =>
+                        new Promise((resolve) => {
+                            const fetcher = new Fetchr();
+                            fetcher.read('error').end(resolve);
+                        }),
+                );
+
+                expect(response.reason).to.equal(FetchrError.BAD_HTTP_STATUS);
+                expect(await getUnhandledRejections()).to.deep.equal([]);
+            });
+
+            it('none for a handled timeout', async () => {
+                const response = await page.evaluate(() => {
+                    const fetcher = new Fetchr();
+                    return fetcher
+                        .read('error', { error: 'timeout' }, { timeout: 20 })
+                        .catch((err) => err);
+                });
+
+                expect(response.reason).to.equal(FetchrError.TIMEOUT);
+                expect(await getUnhandledRejections()).to.deep.equal([]);
+            });
+
+            it('none for a handled abort', async () => {
+                const response = await page.evaluate(() => {
+                    const fetcher = new Fetchr();
+                    const request = fetcher.create('slow');
+                    const result = request.catch((err) => err);
+                    setTimeout(() => request.abort(), 300);
+                    return result;
+                });
+
+                expect(response.reason).to.equal(FetchrError.ABORT);
+                expect(await getUnhandledRejections()).to.deep.equal([]);
             });
         });
 

@@ -19,6 +19,17 @@ app.use(express.json());
 
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
+// Simulates a slow network: the response headers arrive right away,
+// but the JSON body never finishes downloading. Used as xhrPath to
+// test aborts that happen while the client reads the response body.
+app.use('/stalled-body', (req, res) => {
+    res.status(200).type('json');
+    res.flushHeaders();
+    res.write('{"data":');
+    const timer = setTimeout(() => res.end('null}'), 5000);
+    req.on('close', () => clearTimeout(timer));
+});
+
 app.use('/api', Fetchr.middleware(), (err, req, res, next) => {
     res.status(err.statusCode || 500).json({ message: err.message });
 });

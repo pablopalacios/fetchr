@@ -114,6 +114,9 @@ Request.prototype._send = function () {
     this._request = httpRequest(normalizeOptions(this));
     var captureMetaAndStats = this._captureMetaAndStats.bind(this);
 
+    // Only collects stats. The promise returned here is discarded, so
+    // its error handler must not rethrow: nothing would catch it and
+    // every failed request would become an unhandled rejection.
     this._request.then(
         function (result) {
             captureMetaAndStats(null, result);
@@ -121,7 +124,6 @@ Request.prototype._send = function () {
         },
         function (err) {
             captureMetaAndStats(err);
-            throw err;
         },
     );
 

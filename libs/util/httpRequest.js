@@ -83,7 +83,16 @@ function _fetch() {
                 clearTimeout(timeoutId);
 
                 if (response.ok) {
-                    return response.json().catch(function () {
+                    return response.json().catch(function (err) {
+                        if (err && err.name === 'AbortError') {
+                            throw new FetchrError(
+                                FetchrError.ABORT,
+                                err.message,
+                                self._options,
+                                request,
+                            );
+                        }
+
                         throw new FetchrError(
                             FetchrError.BAD_JSON,
                             'Cannot parse response into a JSON object',
